@@ -1,54 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Centered Search Bar</title>
-  <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      background-color: #f5f5f5;
-      font-family: Arial, sans-serif;
-    }
+const tf = (POSTINGS.get(q)?.get(docId)) || 0;
+if(!tf) continue;
+const num = tf * (K1 + 1);
+const den = tf + K1 * denomNorm;
+score += idf(q) * (num / den);
+}
+return score;
+}
 
-    .search-container {
-      text-align: center;
-    }
 
-    input[type="text"] {
-      padding: 10px;
-      width: 300px;
-      border: 1px solid #ccc;
-      border-radius: 25px;
-      outline: none;
-      font-size: 16px;
-    }
+/***********************
+* 5) Search UI
+***********************/
+const resultsEl = document.getElementById('results');
+function renderResults(list, queryTokens){
+resultsEl.innerHTML = '';
+if(!list.length){
+resultsEl.innerHTML = `<div class="empty">No results. Try fewer or different terms.</div>`; return;
+}
+for(const {doc, score} of list){
+const snippet = makeSnippet(doc.content, queryTokens);
+const item = document.createElement('div');
+item.className = 'result';
+item.innerHTML = `
+<h3><a href="${doc.url}">${highlight(doc.title, queryTokens)}</a></h3>
+<div class="muted" style="color:#6b7280;font-size:.9rem;margin:.2rem 0 .4rem">Score: ${score.toFixed(3)}</div>
+<div>${snippet}</div>
+`;
+resultsEl.appendChild(item);
+}
+}
 
-    button {
-      padding: 10px 20px;
-      margin-left: 10px;
-      border: none;
-      border-radius: 25px;
-      background-color: #007bff;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
 
-    button:hover {
-      background-color: #0056b3;
-    }
-  </style>
-</head>
-<body>
-  <div class="search-container">
-    <form action="#">
-      <input type="text" placeholder="Search...">
-      <button type="submit">Search</button>
-    </form>
-  </div>
+function highlight(text, terms){
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const pattern = new RegExp(`\\b(${terms.map(esc).join('|')})\\b`, 'gi');
+return text.replace(pattern, m => `<mark>${m}</mark>`);
+}
+
+
+function makeSnippet(text, terms){
+const words = text.split(/\s+/);
+const lower = words.map(w => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu,''));
+let firstHit = -1;
+for(let i=0;i<lower.length;i++){
+if(terms.includes(lower[i])){ firstHit = i; break; }
+}
+let start = Math.max(0, firstHit - 8);
+let end = Math.min(words.length, start + 30);
+const slice = words.slice(start, end).join(' ');
+return highlight(slice, terms) + (end < words.length ? '…' : '');
+}
+
+
+function search(q){
+const qTokens = tokenize(q);
+if(qTokens.length === 0){ renderResults([], []); return; }
+const scores = [];
+for(const d of DOCS){
+const s = bm25Score(qTokens, d.id);
+if(s > 0) scores.push({doc:d, score:s});
+}
+scores.sort((a,b)=> b.score - a.score);
+renderResults(scores, qTokens);
+}
+
+
+// Hook up form
+const form = document.getElementById('searchForm');
+const input = document.getElementById('q');
+form.addEventListener('submit', (e)=>{ e.preventDefault(); search(input.value); });
+
+
+// Optional: run a default example
+search('bm25 ranking');
+</script>
 </body>
 </html>
